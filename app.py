@@ -11,6 +11,7 @@ from config import PERIODO_ACTIVO, FICHAS_DIR
 from modules.data_loader import upsert_workers_to_db, load_workers_from_db
 from modules.ficha_parser import scan_fichas
 from modules.onedrive_loader import download_fichas_from_onedrive
+from modules.ms_auth import start_device_flow, poll_for_token, get_valid_token, clear_token
 from modules.state_manager import bulk_set
 from modules.report_builder import build_full_table, build_summary, build_global_summary
 
@@ -38,6 +39,43 @@ with st.sidebar:
 
     st.divider()
     st.subheader("2. Fichas desde OneDrive")
+
+    # ── Auth Microsoft ──────────────────────────────────────────────────────────
+    ms_token = get_valid_token()
+    if ms_token:
+        st.success("Cuenta Microsoft conectada")
+        if st.button("Desconectar cuenta"):
+            clear_token()
+            st.rerun()
+    else:
+        _ms_cfg = st.secrets.get("microsoft", {})
+        _client_id = _ms_cfg.get("client_id", "")
+        _tenant_id = _ms_cfg.get("tenant_id", "common")
+
+        if _client_id:
+            if "ms_flow" not in st.session_state:
+                if st.button("Conectar cuenta Microsoft"):
+                    flow = start_device_flow(_client_id, _tenant_id)
+                    st.session_state["ms_flow"] = flow
+                    st.rerun()
+            else:
+                flow = st.session_state["ms_flow"]
+                st.info(
+                    f"1. Abre: **{flow['verification_uri']}**\n"
+                    f"2. Ingresa el código: **{flow['user_code']}**\n"
+                    f"3. Inicia sesión y vuelve aquí."
+                )
+                if st.button("Ya me autentiqué — verificar"):
+                    token, msg = poll_for_token()
+                    if token:
+                        st.success(msg)
+                        st.rerun()
+                    else:
+                        st.warning(msg)
+        else:
+            st.caption("Agrega [microsoft] client_id en Streamlit secrets para autenticarte.")
+
+    # ── Importar fichas ─────────────────────────────────────────────────────────
     onedrive_url = st.text_input(
         "Link de carpeta compartida (OneDrive)",
         placeholder="https://1drv.ms/f/...",
@@ -47,7 +85,9 @@ with st.sidebar:
         with st.spinner("Descargando fichas desde OneDrive..."):
             dest = os.path.join(tempfile.gettempdir(), "fichas", periodo)
             try:
-                n, names = download_fichas_from_onedrive(onedrive_url, dest)
+                n, names = download_fichas_from_onedrive(
+                    onedrive_url, dest, token=get_valid_token()
+                )
                 results = scan_fichas(periodo, base_dir=dest,
                                       workers_df=st.session_state.get("workers_df"))
                 bulk_set(results, periodo)
