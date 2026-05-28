@@ -47,7 +47,7 @@ with st.sidebar:
             for f in fichas_files:
                 with open(os.path.join(dest, f.name), "wb") as out:
                     out.write(f.read())
-            results = scan_fichas(periodo, base_dir=dest)
+            results = scan_fichas(periodo, base_dir=dest, workers_df=st.session_state.get("workers_df"))
             bulk_set(results, periodo)
             st.session_state.pop("full_df", None)
         st.success(f"{len(results)} fichas procesadas")
