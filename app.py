@@ -39,31 +39,34 @@ with st.sidebar:
     st.divider()
     st.subheader("2. Fichas desde OneDrive")
 
-    # ── Opción A: link público ──────────────────────────────────────────────────
-    onedrive_url = st.text_input(
-        "Link de carpeta compartida (OneDrive)",
-        placeholder="https://1drv.ms/f/...",
-        key="onedrive_url",
-    )
-    if onedrive_url and st.button("Importar desde OneDrive"):
-        with st.spinner("Descargando fichas..."):
-            dest = os.path.join(tempfile.gettempdir(), "fichas", periodo)
-            try:
-                n, _ = download_fichas_from_onedrive(onedrive_url, dest)
-                results = scan_fichas(periodo, base_dir=dest,
-                                      workers_df=st.session_state.get("workers_df"))
-                bulk_set(results, periodo)
-                st.session_state.pop("full_df", None)
-                st.success(f"{n} fichas descargadas · {len(results)} procesadas")
-            except Exception as e:
-                st.error(str(e))
+    # ── Opción A: link público (solo OneDrive personal) ─────────────────────────
+    with st.expander("Opción A — Link directo (solo cuentas OneDrive personales)"):
+        st.caption("No funciona con cuentas corporativas M365/SharePoint.")
+        onedrive_url = st.text_input(
+            "Link de carpeta compartida",
+            placeholder="https://1drv.ms/f/...",
+            key="onedrive_url",
+        )
+        if onedrive_url and st.button("Importar desde link"):
+            with st.spinner("Descargando fichas..."):
+                dest = os.path.join(tempfile.gettempdir(), "fichas", periodo)
+                try:
+                    n, _ = download_fichas_from_onedrive(onedrive_url, dest)
+                    results = scan_fichas(periodo, base_dir=dest,
+                                          workers_df=st.session_state.get("workers_df"))
+                    bulk_set(results, periodo)
+                    st.session_state.pop("full_df", None)
+                    st.success(f"{n} fichas descargadas · {len(results)} procesadas")
+                except Exception as e:
+                    st.error(f"{e}\n\nUsa la Opción B (ZIP) si tu cuenta es corporativa.")
 
-    # ── Opción B: subir ZIP de OneDrive ────────────────────────────────────────
-    st.caption("Si el link no funciona: descarga la carpeta como ZIP desde OneDrive y súbela aquí.")
-    zip_file = st.file_uploader("Subir carpeta de fichas (.zip)", type=["zip"], key="fichas_zip")
-    if zip_file and st.button("Procesar ZIP"):
+    # ── Opción B: subir ZIP (siempre funciona) ──────────────────────────────────
+    st.markdown("**Opción B — Subir ZIP** (recomendado para cuentas corporativas)")
+    st.caption("En OneDrive: selecciona la carpeta → clic derecho → Descargar → sube el .zip aquí.")
+    zip_file = st.file_uploader("Carpeta de fichas (.zip)", type=["zip"], key="fichas_zip")
+    if zip_file and st.button("Procesar ZIP", type="primary"):
         import zipfile, io
-        with st.spinner("Extrayendo fichas del ZIP..."):
+        with st.spinner("Extrayendo fichas..."):
             dest = os.path.join(tempfile.gettempdir(), "fichas", periodo)
             os.makedirs(dest, exist_ok=True)
             with zipfile.ZipFile(io.BytesIO(zip_file.read())) as zf:
