@@ -67,7 +67,7 @@ workers_df = st.session_state["workers_df"]
 full_df    = st.session_state["full_df"]
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
-tab_tabla, tab_reporte = st.tabs(["Tabla por gerencia", "Reporte"])
+tab_tabla, tab_reporte, tab_export = st.tabs(["Tabla por gerencia", "Reporte", "Exportar"])
 
 # ── TAB 1 ──────────────────────────────────────────────────────────────────────
 with tab_tabla:
@@ -118,3 +118,32 @@ with tab_reporte:
     st.divider()
     st.subheader("REGISTRO GENERAL")
     st.dataframe(build_global_summary(full_df), use_container_width=True, hide_index=True)
+
+# ── TAB EXPORTAR ───────────────────────────────────────────────────────────────
+with tab_export:
+    from modules.export_xlsx import export_gerencia_xlsx, export_all_xlsx
+    from modules.export_pdf  import export_gerencia_pdf
+
+    st.subheader("Exportar por gerencia")
+    gerencia_exp = st.selectbox("Gerencia", sorted(full_df["gerencia"].dropna().unique()),
+                                key="exp_gerencia")
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+        if st.button("Descargar XLSX (esta gerencia)"):
+            data = export_gerencia_xlsx(full_df, gerencia_exp, periodo)
+            st.download_button("Guardar XLSX", data,
+                               file_name=f"KPI_{gerencia_exp}_{periodo}.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    with c2:
+        if st.button("Descargar PDF (esta gerencia)"):
+            data = export_gerencia_pdf(full_df, gerencia_exp, periodo)
+            st.download_button("Guardar PDF", data,
+                               file_name=f"KPI_{gerencia_exp}_{periodo}.pdf",
+                               mime="application/pdf")
+    with c3:
+        if st.button("Descargar XLSX (todas las gerencias)"):
+            data = export_all_xlsx(full_df, periodo)
+            st.download_button("Guardar XLSX completo", data,
+                               file_name=f"KPI_COMPLETO_{periodo}.xlsx",
+                               mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
