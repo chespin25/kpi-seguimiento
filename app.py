@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from config import PERIODO_ACTIVO, FICHAS_DIR
 from modules.data_loader import upsert_workers_to_db, load_workers_from_db
 from modules.ficha_parser import scan_fichas
+from modules.onedrive_loader import download_fichas_from_onedrive
 from modules.state_manager import bulk_set
 from modules.report_builder import build_full_table, build_summary, build_global_summary
 
@@ -36,7 +37,27 @@ with st.sidebar:
         st.success(f"{n} trabajadores actualizados")
 
     st.divider()
-    st.subheader("2. Fichas KPI")
+    st.subheader("2. Fichas desde OneDrive")
+    onedrive_url = st.text_input(
+        "Link de carpeta compartida (OneDrive)",
+        placeholder="https://1drv.ms/f/...",
+        key="onedrive_url",
+    )
+    if onedrive_url and st.button("Importar desde OneDrive"):
+        with st.spinner("Descargando fichas desde OneDrive..."):
+            dest = os.path.join(tempfile.gettempdir(), "fichas", periodo)
+            try:
+                n, names = download_fichas_from_onedrive(onedrive_url, dest)
+                results = scan_fichas(periodo, base_dir=dest,
+                                      workers_df=st.session_state.get("workers_df"))
+                bulk_set(results, periodo)
+                st.session_state.pop("full_df", None)
+                st.success(f"{n} fichas descargadas · {len(results)} procesadas")
+            except Exception as e:
+                st.error(str(e))
+
+    st.divider()
+    st.subheader("3. Fichas KPI (subida manual)")
     fichas_files = st.file_uploader(
         "Subir fichas (.xlsx / .pdf)", type=["xlsx", "xls", "pdf"],
         accept_multiple_files=True)
