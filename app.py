@@ -91,7 +91,9 @@ with st.sidebar:
         st.success(f"{len(results)} fichas procesadas")
 
 # ── Cargar workers ─────────────────────────────────────────────────────────────
-if "workers_df" not in st.session_state or st.session_state.get("periodo_loaded") != periodo:
+if ("workers_df" not in st.session_state
+        or "full_df" not in st.session_state
+        or st.session_state.get("periodo_loaded") != periodo):
     with st.spinner("Cargando datos..."):
         df_w = load_workers_from_db()
         if df_w.empty:
