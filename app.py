@@ -11,7 +11,6 @@ from config import PERIODO_ACTIVO, FICHAS_DIR
 from modules.data_loader import upsert_workers_to_db, load_workers_from_db
 from modules.ficha_parser import scan_fichas
 from modules.onedrive_loader import download_fichas_from_onedrive
-from modules.ms_auth import start_device_flow, poll_for_token, get_valid_token, clear_token
 from modules.state_manager import bulk_set
 from modules.report_builder import build_full_table, build_summary, build_global_summary
 
@@ -40,54 +39,17 @@ with st.sidebar:
     st.divider()
     st.subheader("2. Fichas desde OneDrive")
 
-    # ── Auth Microsoft ──────────────────────────────────────────────────────────
-    ms_token = get_valid_token()
-    if ms_token:
-        st.success("Cuenta Microsoft conectada")
-        if st.button("Desconectar cuenta"):
-            clear_token()
-            st.rerun()
-    else:
-        _ms_cfg = st.secrets.get("microsoft", {})
-        _client_id = _ms_cfg.get("client_id", "")
-        _tenant_id = _ms_cfg.get("tenant_id", "common")
-
-        if _client_id:
-            if "ms_flow" not in st.session_state:
-                if st.button("Conectar cuenta Microsoft"):
-                    flow = start_device_flow(_client_id, _tenant_id)
-                    st.session_state["ms_flow"] = flow
-                    st.rerun()
-            else:
-                flow = st.session_state["ms_flow"]
-                st.info(
-                    f"1. Abre: **{flow['verification_uri']}**\n"
-                    f"2. Ingresa el código: **{flow['user_code']}**\n"
-                    f"3. Inicia sesión y vuelve aquí."
-                )
-                if st.button("Ya me autentiqué — verificar"):
-                    token, msg = poll_for_token()
-                    if token:
-                        st.success(msg)
-                        st.rerun()
-                    else:
-                        st.warning(msg)
-        else:
-            st.caption("Agrega [microsoft] client_id en Streamlit secrets para autenticarte.")
-
-    # ── Importar fichas ─────────────────────────────────────────────────────────
+    # ── Opción A: link público ──────────────────────────────────────────────────
     onedrive_url = st.text_input(
         "Link de carpeta compartida (OneDrive)",
         placeholder="https://1drv.ms/f/...",
         key="onedrive_url",
     )
     if onedrive_url and st.button("Importar desde OneDrive"):
-        with st.spinner("Descargando fichas desde OneDrive..."):
+        with st.spinner("Descargando fichas..."):
             dest = os.path.join(tempfile.gettempdir(), "fichas", periodo)
             try:
-                n, names = download_fichas_from_onedrive(
-                    onedrive_url, dest, token=get_valid_token()
-                )
+                n, _ = download_fichas_from_onedrive(onedrive_url, dest)
                 results = scan_fichas(periodo, base_dir=dest,
                                       workers_df=st.session_state.get("workers_df"))
                 bulk_set(results, periodo)
@@ -95,6 +57,31 @@ with st.sidebar:
                 st.success(f"{n} fichas descargadas · {len(results)} procesadas")
             except Exception as e:
                 st.error(str(e))
+
+    # ── Opción B: subir ZIP de OneDrive ────────────────────────────────────────
+    st.caption("Si el link no funciona: descarga la carpeta como ZIP desde OneDrive y súbela aquí.")
+    zip_file = st.file_uploader("Subir carpeta de fichas (.zip)", type=["zip"], key="fichas_zip")
+    if zip_file and st.button("Procesar ZIP"):
+        import zipfile, io
+        with st.spinner("Extrayendo fichas del ZIP..."):
+            dest = os.path.join(tempfile.gettempdir(), "fichas", periodo)
+            os.makedirs(dest, exist_ok=True)
+            with zipfile.ZipFile(io.BytesIO(zip_file.read())) as zf:
+                extraidos = 0
+                for member in zf.namelist():
+                    ext = os.path.splitext(member)[1].lower()
+                    if ext in (".xlsx", ".xls", ".pdf"):
+                        fname = os.path.basename(member)
+                        if fname:
+                            with zf.open(member) as src, \
+                                 open(os.path.join(dest, fname), "wb") as dst:
+                                dst.write(src.read())
+                            extraidos += 1
+            results = scan_fichas(periodo, base_dir=dest,
+                                  workers_df=st.session_state.get("workers_df"))
+            bulk_set(results, periodo)
+            st.session_state.pop("full_df", None)
+        st.success(f"{extraidos} archivos extraídos · {len(results)} procesados")
 
     st.divider()
     st.subheader("3. Fichas KPI (subida manual)")
