@@ -10,15 +10,23 @@ sys.path.insert(0, os.path.dirname(__file__))
 from config import PERIODO_ACTIVO, FICHAS_DIR
 from modules.data_loader import upsert_workers_to_db, load_workers_from_db
 from modules.ficha_parser import scan_fichas
-from modules.onedrive_loader import download_fichas_from_onedrive
 from modules.state_manager import bulk_set
 from modules.report_builder import build_full_table, build_summary, build_global_summary
 
 st.set_page_config(page_title="KPI Distribución", layout="wide")
-st.title("Seguimiento KPI — Fichas de Objetivos Individuales")
+
+_LOGO = os.path.join(os.path.dirname(__file__), "assets", "logo_bn.png")
+col_logo, col_title = st.columns([1, 6])
+with col_logo:
+    if os.path.exists(_LOGO):
+        st.image(_LOGO, width=140)
+with col_title:
+    st.title("Seguimiento KPI — Fichas de Objetivos Individuales")
 
 # ── Sidebar ────────────────────────────────────────────────────────────────────
 with st.sidebar:
+    if os.path.exists(_LOGO):
+        st.image(_LOGO, use_container_width=True)
     st.header("Configuración")
     periodo = st.selectbox("Periodo", ["2026", "2025", "2024"], index=0)
 
@@ -140,11 +148,67 @@ with tab_tabla:
 
 # ── TAB 2 ──────────────────────────────────────────────────────────────────────
 with tab_reporte:
+    import plotly.graph_objects as go
     from datetime import date
+
     st.subheader(f"REPORTE AL {date.today().strftime('%d/%m/%Y')}")
-    summary = build_summary(full_df)
-    summary["% AVANCE"] = summary["% AVANCE"].apply(lambda x: f"{x}%")
-    st.dataframe(summary, use_container_width=True, hide_index=True)
+
+    summary_raw = build_summary(full_df)   # % AVANCE como float
+
+    # ── Gráfico ─────────────────────────────────────────────────────────────────
+    gerencias_chart = summary_raw["GERENCIA"].tolist()
+    requeridas      = summary_raw["FICHAS REQUERIDAS"].tolist()
+    registradas     = summary_raw["FICHAS REGISTRADAS"].tolist()
+    pct             = summary_raw["% AVANCE"].tolist()
+
+    fig = go.Figure()
+    fig.add_trace(go.Bar(
+        name="Requeridas",
+        y=gerencias_chart, x=requeridas,
+        orientation="h",
+        marker_color="#D0D5DD",
+        text=requeridas, textposition="outside",
+        textfont=dict(size=10, color="#555"),
+    ))
+    fig.add_trace(go.Bar(
+        name="Registradas",
+        y=gerencias_chart, x=registradas,
+        orientation="h",
+        marker_color="#003F7F",
+        text=[f"{p}%" for p in pct],
+        textposition="inside",
+        textfont=dict(size=10, color="white"),
+        insidetextanchor="middle",
+    ))
+
+    # Totales en anotación al pie
+    tot_req = sum(requeridas)
+    tot_reg = sum(registradas)
+    tot_pct = round(tot_reg / tot_req * 100, 1) if tot_req else 0
+    fig.add_annotation(
+        text=f"<b>TOTAL — Requeridas: {tot_req} | Registradas: {tot_reg} | Avance: {tot_pct}%</b>",
+        xref="paper", yref="paper", x=0, y=-0.08,
+        showarrow=False, font=dict(size=12, color="#003F7F"), align="left",
+    )
+
+    fig.update_layout(
+        barmode="overlay",
+        height=max(420, len(gerencias_chart) * 38 + 120),
+        margin=dict(l=10, r=90, t=20, b=60),
+        legend=dict(orientation="h", yanchor="bottom", y=1.01, x=0),
+        xaxis_title="Número de Fichas",
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        xaxis=dict(showgrid=True, gridcolor="#F0F0F0"),
+        yaxis=dict(autorange="reversed"),
+    )
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ── Tabla y resumen general ─────────────────────────────────────────────────
+    st.divider()
+    summary_display = summary_raw.copy()
+    summary_display["% AVANCE"] = summary_display["% AVANCE"].apply(lambda x: f"{x}%")
+    st.dataframe(summary_display, use_container_width=True, hide_index=True)
     st.divider()
     st.subheader("REGISTRO GENERAL")
     st.dataframe(build_global_summary(full_df), use_container_width=True, hide_index=True)
