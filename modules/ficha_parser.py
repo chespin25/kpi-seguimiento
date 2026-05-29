@@ -124,7 +124,7 @@ def _match_filename_to_gerencia(filename: str, gerencias: list[str]) -> str | No
             continue
         overlap = len(ger_tokens & stem_tokens)
         score   = overlap / len(ger_tokens)   # fracción de tokens de gerencia presentes
-        if score >= 0.5 and overlap >= 1 and score > best_score:
+        if score >= 0.3 and overlap >= 1 and score > best_score:
             best_score, best_ger = score, ger
     return best_ger
 

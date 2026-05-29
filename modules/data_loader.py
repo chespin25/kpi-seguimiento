@@ -107,8 +107,18 @@ def load_encargos(filepath: str) -> dict:
                 gerencia_final = repart_enc
         else:
             gerencia_final = repart_enc
-        result[codigo] = {"gerencia": gerencia_final, "subgerencia": subgerencia_enc,
-                          "comentario": comentario, "cargo_enc": cargo_enc}
+        # Si ya existe un encargo para este código, solo sobreescribir si el nuevo
+        # tiene mayor jerarquía (GERENTE > SUBGERENTE > cualquier otro)
+        prev = result.get(codigo, {})
+        prev_ce = prev.get("cargo_enc", "").upper()
+        new_ce  = cargo_enc.upper()
+        def _rank(ce):
+            if ce.startswith("GERENTE"):   return 3
+            if ce.startswith("SUBGERENTE"): return 2
+            return 1
+        if not prev or _rank(new_ce) >= _rank(prev_ce):
+            result[codigo] = {"gerencia": gerencia_final, "subgerencia": subgerencia_enc,
+                              "comentario": comentario, "cargo_enc": cargo_enc}
     return result
 
 
