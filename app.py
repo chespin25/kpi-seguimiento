@@ -2,7 +2,12 @@ import os
 import sys
 import tempfile
 
+import io
+import zipfile
+from datetime import date
+
 import pandas as pd
+import plotly.graph_objects as go
 import streamlit as st
 
 sys.path.insert(0, os.path.dirname(__file__))
@@ -12,6 +17,8 @@ from modules.data_loader import upsert_workers_to_db, load_workers_from_db
 from modules.ficha_parser import scan_fichas
 from modules.state_manager import bulk_set
 from modules.report_builder import build_full_table, build_summary, build_global_summary
+from modules.export_xlsx import export_gerencia_xlsx, export_all_xlsx
+from modules.export_pdf  import export_gerencia_pdf
 
 st.set_page_config(page_title="KPI Distribución", layout="wide")
 
@@ -52,7 +59,6 @@ with st.sidebar:
     st.caption("En OneDrive: selecciona la carpeta → clic derecho → Descargar → sube el .zip aquí.")
     zip_file = st.file_uploader("Carpeta de fichas (.zip)", type=["zip"], key="fichas_zip")
     if zip_file and st.button("Procesar ZIP", type="primary"):
-        import zipfile, io
         with st.spinner("Extrayendo fichas..."):
             dest = os.path.join(tempfile.gettempdir(), "fichas", periodo)
             os.makedirs(dest, exist_ok=True)
@@ -150,9 +156,6 @@ with tab_tabla:
 
 # ── TAB 2 ──────────────────────────────────────────────────────────────────────
 with tab_reporte:
-    import plotly.graph_objects as go
-    from datetime import date
-
     st.subheader(f"REPORTE AL {date.today().strftime('%d/%m/%Y')}")
 
     summary_raw = build_summary(full_df)   # % AVANCE como float
@@ -217,9 +220,6 @@ with tab_reporte:
 
 # ── TAB EXPORTAR ───────────────────────────────────────────────────────────────
 with tab_export:
-    from modules.export_xlsx import export_gerencia_xlsx, export_all_xlsx
-    from modules.export_pdf  import export_gerencia_pdf
-
     st.subheader("Exportar por gerencia")
     gerencia_exp = st.selectbox("Gerencia", sorted(full_df["gerencia"].dropna().unique()),
                                 key="exp_gerencia")
