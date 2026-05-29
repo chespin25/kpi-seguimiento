@@ -51,7 +51,9 @@ def build_full_table(workers_df: pd.DataFrame, periodo: str = PERIODO_ACTIVO) ->
         lambda r: "; ".join(filter(None, [r["comentario"], extra[r.name]])), axis=1
     )
 
-    return df[OUTPUT_COLS]
+    return (df[OUTPUT_COLS]
+            .sort_values(["gerencia", "subgerencia", "nombre"])
+            .reset_index(drop=True))
 
 
 def build_summary(full_df: pd.DataFrame) -> pd.DataFrame:

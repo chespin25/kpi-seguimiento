@@ -133,7 +133,9 @@ tab_tabla, tab_reporte, tab_export = st.tabs(["Tabla por gerencia", "Reporte", "
 with tab_tabla:
     gerencias    = sorted(full_df["gerencia"].dropna().unique())
     gerencia_sel = st.selectbox("Gerencia", gerencias)
-    df_g = full_df[full_df["gerencia"] == gerencia_sel].copy().reset_index(drop=True)
+    df_g = (full_df[full_df["gerencia"] == gerencia_sel]
+            .sort_values(["subgerencia", "nombre"])
+            .reset_index(drop=True))
 
     si_count = (df_g["subio_ficha"] == "SI").sum()
     total    = len(df_g)
@@ -228,7 +230,7 @@ with tab_reporte:
         plot_bgcolor="white",
         paper_bgcolor="white",
         xaxis=dict(showgrid=True, gridcolor="#F0F0F0"),
-        yaxis=dict(autorange="reversed"),
+        yaxis=dict(categoryorder="category ascending"),
     )
     st.plotly_chart(fig, use_container_width=True)
 
