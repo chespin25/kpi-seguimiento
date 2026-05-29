@@ -93,8 +93,14 @@ def load_encargos(filepath: str) -> dict:
                       if oficina_orig else f"Gerencia de origen: {repart_orig}")
         if repart_enc == "OFICINA PRINCIPAL":
             gerencia_final = "OFICINA PRINCIPAL"
-        elif tipo_ofi_enc.upper() not in _CORPORATE_TIPOS:
-            gerencia_final = "RED DE AGENCIAS"
+        elif _normalize(tipo_ofi_enc) not in _CORPORATE_TIPOS:
+            # tipo_ofi_enc no reconocido: usar repart_enc directamente
+            # salvo que sea claramente una agencia/oficina especial
+            if any(repart_enc.upper().startswith(x)
+                   for x in ("AGENCIA", "OFIC ESPECIAL", "OFICINA ESPECIAL")):
+                gerencia_final = "RED DE AGENCIAS"
+            else:
+                gerencia_final = repart_enc
         else:
             gerencia_final = repart_enc
         result[codigo] = {"gerencia": gerencia_final, "subgerencia": subgerencia_enc,
