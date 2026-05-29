@@ -22,6 +22,15 @@ from modules.export_pdf  import export_gerencia_pdf
 
 st.set_page_config(page_title="KPI Distribución", layout="wide")
 
+# Invalida sesión si el código cambió (evita datos cacheados con versión vieja)
+_CODE_VER = "b4c3ec6"
+if st.session_state.get("_ver") != _CODE_VER:
+    st.session_state.clear()
+    st.session_state["_ver"] = _CODE_VER
+
+if "_planta_ok" in st.session_state:
+    st.success(f"{st.session_state.pop('_planta_ok')} trabajadores actualizados correctamente.")
+
 _LOGO = os.path.join(os.path.dirname(__file__), "assets", "logo_bn.png")
 col_logo, col_title = st.columns([1, 6])
 with col_logo:
@@ -47,9 +56,11 @@ with st.sidebar:
                 tmp_path = tmp.name
             n = upsert_workers_to_db(tmp_path)
             os.unlink(tmp_path)
-            st.session_state.pop("workers_df", None)
-            st.session_state.pop("full_df", None)
-        st.success(f"{n} trabajadores actualizados")
+            for k in list(st.session_state.keys()):
+                if k != "_ver":
+                    st.session_state.pop(k, None)
+            st.session_state["_planta_ok"] = n
+        st.rerun()
 
     st.divider()
     st.subheader("2. Fichas desde OneDrive")
