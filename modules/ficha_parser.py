@@ -45,6 +45,8 @@ def _extract_name_from_xlsx(filepath: str) -> str | None:
         return None
 
 
+_STOP_GER = {"de", "del", "la", "el", "los", "las", "y", "e", "o", "u", "en", "a", "por"}
+
 def _build_name_map(workers_df) -> dict:
     """Retorna {nombre_normalizado: codigo} desde workers_df."""
     name_map = {}
@@ -54,6 +56,66 @@ def _build_name_map(workers_df) -> dict:
         if cod and nom:
             name_map[_norm(nom)] = cod
     return name_map
+
+
+def _build_gerentes_map(workers_df) -> dict:
+    """
+    Retorna {norm_gerencia: codigo_gerente}.
+    Infiere la gerencia desde el CARGO del tipo 'GERENTE X':
+    'GERENTE LEGAL' → LEGAL, 'GERENTE ADMINISTRACIÓN Y LOGÍSTICA' → ADM...
+    Esto evita errores por encargos que mueven al gerente a otra gerencia.
+    """
+    gerencias = list(workers_df["gerencia"].dropna().unique())
+    gerentes: dict = {}
+
+    for _, row in workers_df.iterrows():
+        cargo = str(row.get("cargo", "") or "").strip().upper()
+        cod   = str(row.get("codigo", "") or "").strip()
+        if not cargo.startswith("GERENTE") or not cod:
+            continue
+        # Extraer la parte tras "GERENTE [DE] "
+        after = re.sub(r"^GERENTE\s*(DE\s+)?", "", cargo).strip()
+        if not after:
+            continue
+        # Buscar gerencia con mayor solapamiento de tokens significativos
+        after_tokens = {t for t in _norm(after).split()
+                        if len(t) > 2 and t.lower() not in _STOP_GER}
+        best_ger, best_score = None, 0.0
+        for ger in gerencias:
+            ger_tokens = {t for t in _norm(ger).split()
+                          if len(t) > 2 and t.lower() not in _STOP_GER}
+            if not ger_tokens:
+                continue
+            score = len(ger_tokens & after_tokens) / len(ger_tokens)
+            if score >= 0.5 and score > best_score:
+                best_score, best_ger = score, ger
+        if best_ger:
+            key = _norm(best_ger)
+            if key not in gerentes:
+                gerentes[key] = cod
+    return gerentes
+
+
+def _match_filename_to_gerencia(filename: str, gerencias: list[str]) -> str | None:
+    """
+    Intenta asociar un filename sin código a una gerencia por similitud de tokens.
+    Retorna el nombre de gerencia si hay match suficiente, o None.
+    """
+    stem = re.sub(r"[_\-]", " ", os.path.splitext(os.path.basename(filename))[0])
+    stem_norm = _norm(stem)
+    stem_tokens = {t for t in stem_norm.split() if len(t) > 2 and t.lower() not in _STOP_GER}
+
+    best_ger, best_score = None, 0
+    for ger in gerencias:
+        ger_norm   = _norm(ger)
+        ger_tokens = {t for t in ger_norm.split() if len(t) > 2 and t.lower() not in _STOP_GER}
+        if not ger_tokens:
+            continue
+        overlap = len(ger_tokens & stem_tokens)
+        score   = overlap / len(ger_tokens)   # fracción de tokens de gerencia presentes
+        if score >= 0.5 and overlap >= 1 and score > best_score:
+            best_score, best_ger = score, ger
+    return best_ger
 
 
 def _match_extracted_name(extracted: str, name_map: dict) -> str | None:
@@ -154,7 +216,13 @@ def scan_fichas(periodo: str, base_dir: str = None, workers_df=None) -> list[dic
     if not os.path.isdir(folder):
         return []
 
-    name_map = _build_name_map(workers_df) if workers_df is not None and not workers_df.empty else {}
+    name_map     = {}
+    gerentes_map = {}
+    gerencias_list: list[str] = []
+    if workers_df is not None and not workers_df.empty:
+        name_map      = _build_name_map(workers_df)
+        gerentes_map  = _build_gerentes_map(workers_df)
+        gerencias_list = list(workers_df["gerencia"].dropna().unique())
 
     results = []
     seen = set()
@@ -166,11 +234,18 @@ def scan_fichas(periodo: str, base_dir: str = None, workers_df=None) -> list[dic
         fpath  = os.path.join(folder, fname)
         codigo = _extract_code(fname)
 
-        # Fallback: abrir el xlsx y extraer nombre para matchear
-        if not codigo and name_map and ext in (".xlsx", ".xls"):
-            extracted = _extract_name_from_xlsx(fpath)
-            if extracted:
-                codigo = _match_extracted_name(extracted, name_map)
+        if not codigo and ext in (".xlsx", ".xls"):
+            # 1. Intentar extraer nombre desde dentro del xlsx
+            if name_map:
+                extracted = _extract_name_from_xlsx(fpath)
+                if extracted:
+                    codigo = _match_extracted_name(extracted, name_map)
+
+            # 2. Si sigue sin código, intentar match por gerencia → asignar al gerente
+            if not codigo and gerentes_map and gerencias_list:
+                ger = _match_filename_to_gerencia(fname, gerencias_list)
+                if ger:
+                    codigo = gerentes_map.get(_norm(ger))
 
         if not codigo or codigo in seen:
             continue

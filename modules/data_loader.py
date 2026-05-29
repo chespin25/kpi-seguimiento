@@ -57,7 +57,7 @@ def load_planta(filepath: str) -> pd.DataFrame:
     df_raw = df_raw.dropna(how="all")
     idx = PLANTA_IDX
     df = df_raw.iloc[:, list(idx.values())].copy()
-    df.columns = ["codigo", "nombre", "cargo", "gerencia", "tipo_oficina", "oficina", "area"]
+    df.columns = ["codigo", "nombre", "grupo", "cargo", "gerencia", "tipo_oficina", "oficina", "area"]
     for col in df.columns:
         df[col] = df[col].fillna("").str.strip()
     df["subgerencia"] = df.apply(
@@ -70,7 +70,7 @@ def load_planta(filepath: str) -> pd.DataFrame:
         return row["gerencia"]
     df["gerencia"] = df.apply(_resolve, axis=1)
     df = df[df["codigo"].str.match(r"^\d{7}$", na=False)].reset_index(drop=True)
-    return df[["codigo", "nombre", "cargo", "gerencia", "subgerencia", "area", "tipo_oficina", "oficina"]]
+    return df[["codigo", "nombre", "grupo", "cargo", "gerencia", "subgerencia", "area", "tipo_oficina", "oficina"]]
 
 
 def load_encargos(filepath: str) -> dict:
@@ -130,7 +130,7 @@ def build_workers_table(filepath: str) -> pd.DataFrame:
     df["gerencia"]    = override["gerencia"]
     df["subgerencia"] = override["subgerencia"]
     df["comentario"]  = override["comentario"]
-    df = df.drop(columns=["tipo_oficina", "oficina"])
+    df = df.drop(columns=["tipo_oficina", "oficina", "grupo"])
     if "area" not in df.columns:
         df["area"] = ""
     canonical = _canonical_gerencias(df["gerencia"])

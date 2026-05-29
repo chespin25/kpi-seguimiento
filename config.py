@@ -9,6 +9,7 @@ PLANTA_ENCARGOS_SHEET = "ENCARGOS"
 PLANTA_IDX = {
     "codigo":       0,   # CODIGO
     "nombre":       1,   # APELLIDOS Y NOMBRES
+    "grupo":        3,   # GRUPO (GERENTE, ANALISTA, TECNICO…)
     "cargo":        7,   # CARGO
     "reparticion":  8,   # REPARTICIÓN  ← nivel gerencia (top-level)
     "tipo_oficina": 10,  # TIPO OFICINA
