@@ -1,41 +1,83 @@
 import os
 import re
+import unicodedata
 import openpyxl
 from config import FICHAS_DIR, FICHA_SHEET, FICHA_COL_N
 
 
-_CODE_RE = re.compile(r"^(\d{7})")
-_STOP = {"de", "del", "la", "el", "los", "las", "y", "e", "o", "u", "en", "a"}
+_CODE_RE  = re.compile(r"^(\d{7})")
+_NAME_KW  = re.compile(r"(APELLIDO|NOMBRE|TRABAJADOR|SERVIDOR)", re.IGNORECASE)
 
 
-def _abbrev(gerencia: str) -> str:
-    parts = []
-    for word in re.split(r"[\s/\-]+", gerencia):
-        w = word.strip()
-        if not w or w.lower() in _STOP:
-            continue
-        parts.append(w if w.isupper() and len(w) > 1 else w[0].upper())
-    return "".join(parts)
-
-
-def _build_abbrev_map(workers_df) -> dict:
-    """
-    Retorna {abbrev_gerencia: [codigos]} para matching de archivos sin código.
-    """
-    result = {}
-    for _, row in workers_df.iterrows():
-        gerencia = str(row.get("gerencia", "") or "")
-        codigo   = str(row.get("codigo",   "") or "")
-        if not gerencia or not codigo:
-            continue
-        key = _abbrev(gerencia).upper()
-        result.setdefault(key, []).append(codigo)
-    return result
+def _norm(s: str) -> str:
+    return unicodedata.normalize("NFD", s.upper()).encode("ascii", "ignore").decode().strip()
 
 
 def _extract_code(filename: str) -> str | None:
     m = _CODE_RE.match(os.path.basename(filename))
     return m.group(1) if m else None
+
+
+def _extract_name_from_xlsx(filepath: str) -> str | None:
+    """
+    Abre el xlsx y busca el nombre del trabajador en las primeras 30 filas.
+    Estrategia: celda con keyword NOMBRE/APELLIDO → devuelve celda adyacente.
+    """
+    try:
+        wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
+        sheet = wb[FICHA_SHEET] if FICHA_SHEET in wb.sheetnames else wb.active
+        rows = list(sheet.iter_rows(max_row=30, values_only=True))
+        for row in rows:
+            for j, cell in enumerate(row):
+                if cell is None:
+                    continue
+                text = str(cell).strip()
+                if _NAME_KW.search(text) and len(text) < 60:
+                    # buscar valor en la misma fila (cols siguientes)
+                    for k in range(j + 1, min(j + 6, len(row))):
+                        val = row[k]
+                        if val and str(val).strip() and not _NAME_KW.search(str(val)):
+                            candidate = str(val).strip()
+                            if len(candidate) > 5 and re.search(r"[A-Za-zÁáÉéÍíÓóÚúÑñ]", candidate):
+                                return candidate
+        return None
+    except Exception:
+        return None
+
+
+def _build_name_map(workers_df) -> dict:
+    """Retorna {nombre_normalizado: codigo} desde workers_df."""
+    name_map = {}
+    for _, row in workers_df.iterrows():
+        cod = str(row.get("codigo", "") or "").strip()
+        nom = str(row.get("nombre", "") or "").strip()
+        if cod and nom:
+            name_map[_norm(nom)] = cod
+    return name_map
+
+
+def _match_extracted_name(extracted: str, name_map: dict) -> str | None:
+    """
+    Compara el nombre extraído del xlsx contra name_map.
+    Acepta: coincidencia exacta normalizada, o todos los tokens del nombre
+    de planta presentes en el texto extraído.
+    """
+    norm_extracted = _norm(extracted)
+    # Exacto
+    if norm_extracted in name_map:
+        return name_map[norm_extracted]
+    # Tokens: todos los tokens del nombre de planta deben estar en el extraído
+    ext_tokens = set(norm_extracted.split())
+    best_cod, best_score = None, 0
+    for nom_norm, cod in name_map.items():
+        tokens = set(nom_norm.split())
+        if len(tokens) < 2:
+            continue
+        matches = tokens & ext_tokens
+        if matches == tokens:          # match completo
+            if len(tokens) > best_score:
+                best_score, best_cod = len(tokens), cod
+    return best_cod
 
 
 def _count_objectives(filepath: str) -> int | None:
@@ -45,7 +87,6 @@ def _count_objectives(filepath: str) -> int | None:
             return None
         ws = wb[FICHA_SHEET]
 
-        # Encontrar columna "Nª" en las primeras 20 filas
         col_idx = None
         header_row = None
         for row in ws.iter_rows(max_row=20, values_only=True):
@@ -76,26 +117,18 @@ def _count_objectives(filepath: str) -> int | None:
         return None
 
 
-def _match_by_name(filename: str, name_map: dict) -> str | None:
-    stem = re.sub(r"[_\-]", " ", os.path.splitext(os.path.basename(filename))[0]).upper()
-    stem_tokens = set(stem.split())
-    best, best_score = None, 0
-    for nombre, codigo in name_map.items():
-        score = len(set(nombre.split()) & stem_tokens)
-        if score >= 2 and score > best_score:
-            best_score, best = score, codigo
-    return best
-
-
 def scan_fichas(periodo: str, base_dir: str = None, workers_df=None) -> list[dict]:
     """
     Escanea base_dir (o FICHAS_DIR/<periodo>/) y retorna lista de dicts:
     {"codigo": ..., "subio_ficha": "SI", "nro_objetivos": N o None}
-    Si workers_df se provee, intenta matchear archivos sin código por nombre.
+    Para xlsx sin código de 7 dígitos, intenta extraer el nombre desde dentro
+    del archivo y matchearlo contra workers_df.
     """
     folder = base_dir or os.path.join(FICHAS_DIR, periodo)
     if not os.path.isdir(folder):
         return []
+
+    name_map = _build_name_map(workers_df) if workers_df is not None and not workers_df.empty else {}
 
     results = []
     seen = set()
@@ -103,14 +136,23 @@ def scan_fichas(periodo: str, base_dir: str = None, workers_df=None) -> list[dic
         ext = os.path.splitext(fname)[1].lower()
         if ext not in (".xlsx", ".xls", ".pdf"):
             continue
+
+        fpath  = os.path.join(folder, fname)
         codigo = _extract_code(fname)
+
+        # Fallback: abrir el xlsx y extraer nombre para matchear
+        if not codigo and name_map and ext in (".xlsx", ".xls"):
+            extracted = _extract_name_from_xlsx(fpath)
+            if extracted:
+                codigo = _match_extracted_name(extracted, name_map)
+
         if not codigo or codigo in seen:
             continue
         seen.add(codigo)
 
         entry = {"codigo": codigo, "subio_ficha": "SI", "nro_objetivos": None}
         if ext in (".xlsx", ".xls"):
-            entry["nro_objetivos"] = _count_objectives(os.path.join(folder, fname))
+            entry["nro_objetivos"] = _count_objectives(fpath)
         results.append(entry)
 
     return results

@@ -111,6 +111,9 @@ if ("workers_df" not in st.session_state
 
 workers_df = st.session_state["workers_df"]
 full_df    = st.session_state["full_df"]
+# Compatibilidad: columna area puede no existir en Supabase aún
+if "area" not in full_df.columns:
+    full_df["area"] = ""
 
 # ── Tabs ───────────────────────────────────────────────────────────────────────
 tab_tabla, tab_reporte, tab_export = st.tabs(["Tabla por gerencia", "Reporte", "Exportar"])
@@ -130,26 +133,27 @@ with tab_tabla:
 
     edited = st.data_editor(
         df_g[["codigo", "nombre", "subgerencia", "area", "cargo",
-              "subio_ficha", "comentario", "nro_objetivos", "formato_firmado"]],
+              "subio_ficha", "comentario", "nro_objetivos"]],
         use_container_width=True,
         hide_index=True,
         column_config={
-            "codigo":          st.column_config.TextColumn("Código",       disabled=True, width="small"),
-            "nombre":          st.column_config.TextColumn("Nombres",      disabled=True, width="large"),
-            "subgerencia":     st.column_config.TextColumn("Subgerencia",  disabled=True, width="medium"),
-            "area":            st.column_config.TextColumn("Área",         disabled=True, width="small"),
-            "cargo":           st.column_config.TextColumn("Cargo",        disabled=True, width="medium"),
-            "subio_ficha":     st.column_config.SelectboxColumn("Ficha",   options=["SI","NO"], width="small"),
-            "comentario":      st.column_config.TextColumn("Comentario",   width="large"),
-            "nro_objetivos":   st.column_config.NumberColumn("Nro. Obj",   min_value=0, step=1, width="small"),
-            "formato_firmado": st.column_config.SelectboxColumn("Firmado", options=["SI","NO"], width="small"),
+            "codigo":        st.column_config.TextColumn("Código",      disabled=True, width="small"),
+            "nombre":        st.column_config.TextColumn("Nombres",     disabled=True, width="large"),
+            "subgerencia":   st.column_config.TextColumn("Subgerencia", disabled=True, width="medium"),
+            "area":          st.column_config.TextColumn("Área",        disabled=True, width="small"),
+            "cargo":         st.column_config.TextColumn("Cargo",       disabled=True, width="medium"),
+            "subio_ficha":   st.column_config.SelectboxColumn("Ficha",  options=["SI","NO"], width="small"),
+            "comentario":    st.column_config.TextColumn("Comentario",  width="large"),
+            "nro_objetivos": st.column_config.NumberColumn("Nro. Obj",  min_value=0, step=1, width="small"),
         },
         num_rows="fixed",
         key=f"editor_{gerencia_sel}_{periodo}",
     )
 
     if st.button("Guardar cambios", type="primary"):
-        updates = edited.rename(columns={"comentario": "comentario_extra"}).to_dict("records")
+        updates = (edited.drop(columns=["area"], errors="ignore")
+                        .rename(columns={"comentario": "comentario_extra"})
+                        .to_dict("records"))
         bulk_set(updates, periodo)
         st.session_state["full_df"] = build_full_table(workers_df, periodo)
         st.success("Guardado")
