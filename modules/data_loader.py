@@ -137,9 +137,15 @@ def upsert_workers_to_db(filepath: str):
     df = build_workers_table(filepath)
     records = df.fillna("").to_dict("records")
     db = get_client()
-    # upsert en lotes de 500
+    extra_cols = ["area"]   # columnas que pueden no existir aún en la tabla
     for i in range(0, len(records), 500):
-        db.table("workers").upsert(records[i:i+500], on_conflict="codigo").execute()
+        batch = records[i:i+500]
+        try:
+            db.table("workers").upsert(batch, on_conflict="codigo").execute()
+        except Exception:
+            # Columna nueva no existe en DB → reintentar sin ella
+            clean = [{k: v for k, v in r.items() if k not in extra_cols} for r in batch]
+            db.table("workers").upsert(clean, on_conflict="codigo").execute()
     return len(records)
 
 
