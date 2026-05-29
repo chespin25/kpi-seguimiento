@@ -154,13 +154,21 @@ def upsert_workers_to_db(filepath: str):
 
 
 def load_workers_from_db() -> pd.DataFrame:
-    """Lee workers desde Supabase."""
+    """Lee workers desde Supabase con paginación (evita límite de 1000 filas)."""
     from modules.db import get_client
     db = get_client()
-    rows = db.table("workers").select("*").execute().data
-    if not rows:
+    all_rows, offset = [], 0
+    while True:
+        page = db.table("workers").select("*").range(offset, offset + 999).execute().data
+        if not page:
+            break
+        all_rows.extend(page)
+        if len(page) < 1000:
+            break
+        offset += 1000
+    if not all_rows:
         return pd.DataFrame()
-    df = pd.DataFrame(rows)
+    df = pd.DataFrame(all_rows)
     df = df.drop(columns=["updated_at"], errors="ignore")
     if "area" not in df.columns:
         df["area"] = ""
