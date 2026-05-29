@@ -80,6 +80,32 @@ def _match_extracted_name(extracted: str, name_map: dict) -> str | None:
     return best_cod
 
 
+def _detect_signed(filepath: str) -> str:
+    """
+    Detecta si la ficha tiene formato firmado.
+    SI si: hay imagen insertada (firma escaneada) o celda 'FIRM*' con valor adyacente.
+    """
+    try:
+        wb = openpyxl.load_workbook(filepath, data_only=True)
+        sheet = wb[FICHA_SHEET] if FICHA_SHEET in wb.sheetnames else wb.active
+        # Imagen insertada → firma escaneada
+        if getattr(sheet, "_images", None):
+            return "SI"
+        # Buscar celda con 'FIRM' y valor adyacente no vacío
+        for row in sheet.iter_rows(max_row=60, values_only=True):
+            for j, cell in enumerate(row):
+                if cell is None:
+                    continue
+                if "FIRM" in str(cell).upper():
+                    for k in range(j + 1, min(j + 6, len(row))):
+                        v = row[k]
+                        if v and str(v).strip() not in ("", "None"):
+                            return "SI"
+        return "NO"
+    except Exception:
+        return "NO"
+
+
 def _count_objectives(filepath: str) -> int | None:
     try:
         wb = openpyxl.load_workbook(filepath, read_only=True, data_only=True)
@@ -150,9 +176,10 @@ def scan_fichas(periodo: str, base_dir: str = None, workers_df=None) -> list[dic
             continue
         seen.add(codigo)
 
-        entry = {"codigo": codigo, "subio_ficha": "SI", "nro_objetivos": None}
+        entry = {"codigo": codigo, "subio_ficha": "SI", "nro_objetivos": None, "formato_firmado": "NO"}
         if ext in (".xlsx", ".xls"):
-            entry["nro_objetivos"] = _count_objectives(fpath)
+            entry["nro_objetivos"]   = _count_objectives(fpath)
+            entry["formato_firmado"] = _detect_signed(fpath)
         results.append(entry)
 
     return results

@@ -131,27 +131,34 @@ with tab_tabla:
     c2.metric("Subieron ficha", si_count)
     c3.metric("% Avance", f"{round(si_count/total*100,1)}%" if total else "0%")
 
+    _display_cols = ["codigo", "nombre", "gerencia", "subgerencia", "cargo",
+                     "subio_ficha", "comentario", "nro_objetivos", "formato_firmado"]
+    # Garantizar que todas las columnas existen
+    for _c in _display_cols:
+        if _c not in df_g.columns:
+            df_g[_c] = "" if _c != "nro_objetivos" else None
+
     edited = st.data_editor(
-        df_g[["codigo", "nombre", "subgerencia", "area", "cargo",
-              "subio_ficha", "comentario", "nro_objetivos"]],
+        df_g[_display_cols],
         use_container_width=True,
         hide_index=True,
         column_config={
-            "codigo":        st.column_config.TextColumn("Código",      disabled=True, width="small"),
-            "nombre":        st.column_config.TextColumn("Nombres",     disabled=True, width="large"),
-            "subgerencia":   st.column_config.TextColumn("Subgerencia", disabled=True, width="medium"),
-            "area":          st.column_config.TextColumn("Área",        disabled=True, width="small"),
-            "cargo":         st.column_config.TextColumn("Cargo",       disabled=True, width="medium"),
-            "subio_ficha":   st.column_config.SelectboxColumn("Ficha",  options=["SI","NO"], width="small"),
-            "comentario":    st.column_config.TextColumn("Comentario",  width="large"),
-            "nro_objetivos": st.column_config.NumberColumn("Nro. Obj",  min_value=0, step=1, width="small"),
+            "codigo":          st.column_config.TextColumn("CÓDIGO",                        disabled=True, width="small"),
+            "nombre":          st.column_config.TextColumn("APELLIDOS Y NOMBRES",           disabled=True, width="large"),
+            "gerencia":        st.column_config.TextColumn("GERENCIA",                      disabled=True, width="medium"),
+            "subgerencia":     st.column_config.TextColumn("GERENCIA / SUBGERENCIA / JEFATURA", disabled=True, width="large"),
+            "cargo":           st.column_config.TextColumn("CARGO",                         disabled=True, width="medium"),
+            "subio_ficha":     st.column_config.SelectboxColumn("FICHA",                    options=["SI","NO"], width="small"),
+            "comentario":      st.column_config.TextColumn("COMENTARIO",                    width="large"),
+            "nro_objetivos":   st.column_config.NumberColumn("NRO OBJETIVOS ASIGNADOS",     min_value=0, step=1, width="small"),
+            "formato_firmado": st.column_config.SelectboxColumn("FORMATO FIRMADO",          options=["SI","NO"], width="small"),
         },
         num_rows="fixed",
         key=f"editor_{gerencia_sel}_{periodo}",
     )
 
     if st.button("Guardar cambios", type="primary"):
-        updates = (edited.drop(columns=["area"], errors="ignore")
+        updates = (edited.drop(columns=["gerencia", "subgerencia", "cargo"], errors="ignore")
                         .rename(columns={"comentario": "comentario_extra"})
                         .to_dict("records"))
         bulk_set(updates, periodo)
