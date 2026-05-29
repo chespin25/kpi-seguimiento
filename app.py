@@ -23,13 +23,15 @@ from modules.export_pdf  import export_gerencia_pdf
 st.set_page_config(page_title="KPI Distribución", layout="wide")
 
 # Invalida sesión si el código cambió (evita datos cacheados con versión vieja)
-_CODE_VER = "c7f1d92"
+_CODE_VER = "d8e2a03"
 if st.session_state.get("_ver") != _CODE_VER:
     st.session_state.clear()
     st.session_state["_ver"] = _CODE_VER
 
 if "_planta_ok" in st.session_state:
     st.success(f"{st.session_state.pop('_planta_ok')} trabajadores actualizados correctamente.")
+if "_fichas_ok" in st.session_state:
+    st.success(st.session_state.pop("_fichas_ok"))
 
 _LOGO = os.path.join(os.path.dirname(__file__), "assets", "logo_bn.png")
 col_logo, col_title = st.columns([1, 6])
@@ -88,7 +90,8 @@ with st.sidebar:
                                   workers_df=st.session_state.get("workers_df"))
             bulk_set(results, periodo)
             st.session_state.pop("full_df", None)
-        st.success(f"{extraidos} archivos extraídos · {len(results)} procesados")
+            st.session_state["_fichas_ok"] = f"{extraidos} archivos extraídos · {len(results)} procesados"
+        st.rerun()
 
     st.divider()
     st.subheader("3. Fichas KPI (subida manual)")
@@ -105,7 +108,8 @@ with st.sidebar:
             results = scan_fichas(periodo, base_dir=dest, workers_df=st.session_state.get("workers_df"))
             bulk_set(results, periodo)
             st.session_state.pop("full_df", None)
-        st.success(f"{len(results)} fichas procesadas")
+            st.session_state["_fichas_ok"] = f"{len(results)} fichas procesadas"
+        st.rerun()
 
 # ── Cargar workers ─────────────────────────────────────────────────────────────
 if ("workers_df" not in st.session_state

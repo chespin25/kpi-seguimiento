@@ -15,7 +15,7 @@ def get_all_for_periodo(periodo: str) -> dict:
         if len(page) < 1000:
             break
         offset += 1000
-    return {r["codigo"]: r for r in all_rows}
+    return {str(r["codigo"]).strip(): r for r in all_rows}
 
 
 def bulk_set(updates: list[dict], periodo: str):

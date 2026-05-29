@@ -39,16 +39,16 @@ def build_full_table(workers_df: pd.DataFrame, periodo: str = PERIODO_ACTIVO) ->
     state = get_all_for_periodo(periodo)
 
     df = workers_df.copy()
-    df["subio_ficha"]     = df["codigo"].map(lambda c: state.get(c, {}).get("subio_ficha") or "NO")
-    df["nro_objetivos"]   = df["codigo"].map(lambda c: state.get(c, {}).get("nro_objetivos"))
-    df["formato_firmado"] = df["codigo"].map(lambda c: state.get(c, {}).get("formato_firmado") or "NO")
+    df["subio_ficha"]     = df["codigo"].map(lambda c: state.get(str(c).strip(), {}).get("subio_ficha") or "NO")
+    df["nro_objetivos"]   = df["codigo"].map(lambda c: state.get(str(c).strip(), {}).get("nro_objetivos"))
+    df["formato_firmado"] = df["codigo"].map(lambda c: state.get(str(c).strip(), {}).get("formato_firmado") or "NO")
     if "area" not in df.columns:
         df["area"] = ""
     if "cargo_enc" not in df.columns:
         df["cargo_enc"] = ""
 
     # comentario: combina el de encargo (data_loader) + comentario_extra del estado
-    extra = df["codigo"].map(lambda c: state.get(c, {}).get("comentario_extra") or "")
+    extra = df["codigo"].map(lambda c: state.get(str(c).strip(), {}).get("comentario_extra") or "")
     df["comentario"] = df["comentario"].fillna("").str.strip()
     df["comentario"] = df.apply(
         lambda r: "; ".join(filter(None, [r["comentario"], extra[r.name]])), axis=1
