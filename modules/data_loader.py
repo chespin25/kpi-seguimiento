@@ -88,6 +88,8 @@ def load_encargos(filepath: str) -> dict:
         repart_enc   = str(row.iloc[idx["repart_enc"]]).strip()
         tipo_ofi_enc = str(row.iloc[idx["tipo_ofi_enc"]]).strip()
         oficina_enc  = str(row.iloc[idx["oficina_enc"]]).strip()
+        if repart_enc in ("nan", "", "None"):
+            continue   # encargo sin destino válido → ignorar
         subgerencia_enc = _format_subgerencia(tipo_ofi_enc, oficina_enc)
         comentario = (f"Oficina de origen: {repart_orig} - {oficina_orig}"
                       if oficina_orig else f"Gerencia de origen: {repart_orig}")
@@ -115,9 +117,10 @@ def build_workers_table(filepath: str) -> pd.DataFrame:
     def apply_encargo(row):
         enc = encargos.get(row["codigo"])
         if enc:
+            ger = enc["gerencia"] or row["gerencia"]   # fallback a home si destino vacío
             return pd.Series({
-                "gerencia":    row["gerencia"],       # home gerencia siempre fija
-                "subgerencia": enc["subgerencia"],    # destino del encargo
+                "gerencia":    ger,
+                "subgerencia": enc["subgerencia"] or row["subgerencia"],
                 "comentario":  enc["comentario"],
             })
         return pd.Series({"gerencia": row["gerencia"],
