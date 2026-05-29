@@ -13,6 +13,7 @@ PLANTA_IDX = {
     "reparticion":  8,   # REPARTICIÓN  ← nivel gerencia (top-level)
     "tipo_oficina": 10,  # TIPO OFICINA
     "oficina":      11,  # OFICINA      ← subgerencia/jefatura/sección
+    "area":         12,  # ÁREA         ← área geográfica (OFI. PRINC, etc.)
 }
 
 # Índices de columnas en hoja ENCARGOS (0-based, fila 1 = header)

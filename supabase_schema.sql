@@ -3,10 +3,14 @@ CREATE TABLE IF NOT EXISTS workers (
   nombre       TEXT NOT NULL,
   gerencia     TEXT NOT NULL,
   subgerencia  TEXT,
+  area         TEXT DEFAULT '',
   cargo        TEXT,
   comentario   TEXT DEFAULT '',
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migración: agregar columna area si la tabla ya existe
+ALTER TABLE workers ADD COLUMN IF NOT EXISTS area TEXT DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS kpi_state (
   codigo           TEXT NOT NULL,

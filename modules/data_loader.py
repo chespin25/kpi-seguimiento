@@ -57,7 +57,7 @@ def load_planta(filepath: str) -> pd.DataFrame:
     df_raw = df_raw.dropna(how="all")
     idx = PLANTA_IDX
     df = df_raw.iloc[:, list(idx.values())].copy()
-    df.columns = ["codigo", "nombre", "cargo", "gerencia", "tipo_oficina", "oficina"]
+    df.columns = ["codigo", "nombre", "cargo", "gerencia", "tipo_oficina", "oficina", "area"]
     for col in df.columns:
         df[col] = df[col].fillna("").str.strip()
     df["subgerencia"] = df.apply(
@@ -70,7 +70,7 @@ def load_planta(filepath: str) -> pd.DataFrame:
         return row["gerencia"]
     df["gerencia"] = df.apply(_resolve, axis=1)
     df = df[df["codigo"].str.match(r"^\d{7}$", na=False)].reset_index(drop=True)
-    return df[["codigo", "nombre", "cargo", "gerencia", "subgerencia", "tipo_oficina", "oficina"]]
+    return df[["codigo", "nombre", "cargo", "gerencia", "subgerencia", "area", "tipo_oficina", "oficina"]]
 
 
 def load_encargos(filepath: str) -> dict:
@@ -118,6 +118,8 @@ def build_workers_table(filepath: str) -> pd.DataFrame:
     df["subgerencia"] = override["subgerencia"]
     df["comentario"]  = override["comentario"]
     df = df.drop(columns=["tipo_oficina", "oficina"])
+    if "area" not in df.columns:
+        df["area"] = ""
     canonical = _canonical_gerencias(df["gerencia"])
     df["gerencia"] = df["gerencia"].map(canonical)
     return df.sort_values(["gerencia", "subgerencia", "nombre"]).reset_index(drop=True)
@@ -144,4 +146,6 @@ def load_workers_from_db() -> pd.DataFrame:
         return pd.DataFrame()
     df = pd.DataFrame(rows)
     df = df.drop(columns=["updated_at"], errors="ignore")
+    if "area" not in df.columns:
+        df["area"] = ""
     return df.sort_values(["gerencia", "subgerencia", "nombre"]).reset_index(drop=True)

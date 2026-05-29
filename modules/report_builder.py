@@ -8,6 +8,7 @@ OUTPUT_COLS = [
     "nombre",
     "gerencia",
     "subgerencia",
+    "area",
     "cargo",
     "subio_ficha",
     "comentario",
@@ -20,6 +21,7 @@ DISPLAY_COLS = {
     "nombre":          "APELLIDOS Y NOMBRES",
     "gerencia":        "GERENCIA",
     "subgerencia":     "GERENCIA / SUBGERENCIA / JEFATURA",
+    "area":            "ÁREA",
     "cargo":           "CARGO",
     "subio_ficha":     "SUBIÓ FICHA\nSI / NO",
     "comentario":      "COMENTARIO",
@@ -39,6 +41,8 @@ def build_full_table(workers_df: pd.DataFrame, periodo: str = PERIODO_ACTIVO) ->
     df["subio_ficha"]     = df["codigo"].map(lambda c: state.get(c, {}).get("subio_ficha") or "NO")
     df["nro_objetivos"]   = df["codigo"].map(lambda c: state.get(c, {}).get("nro_objetivos"))
     df["formato_firmado"] = df["codigo"].map(lambda c: state.get(c, {}).get("formato_firmado") or "NO")
+    if "area" not in df.columns:
+        df["area"] = ""
 
     # comentario: combina el de encargo (data_loader) + comentario_extra del estado
     extra = df["codigo"].map(lambda c: state.get(c, {}).get("comentario_extra") or "")

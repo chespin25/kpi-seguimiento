@@ -129,7 +129,7 @@ with tab_tabla:
     c3.metric("% Avance", f"{round(si_count/total*100,1)}%" if total else "0%")
 
     edited = st.data_editor(
-        df_g[["codigo", "nombre", "subgerencia", "cargo",
+        df_g[["codigo", "nombre", "subgerencia", "area", "cargo",
               "subio_ficha", "comentario", "nro_objetivos", "formato_firmado"]],
         use_container_width=True,
         hide_index=True,
@@ -137,6 +137,7 @@ with tab_tabla:
             "codigo":          st.column_config.TextColumn("Código",       disabled=True, width="small"),
             "nombre":          st.column_config.TextColumn("Nombres",      disabled=True, width="large"),
             "subgerencia":     st.column_config.TextColumn("Subgerencia",  disabled=True, width="medium"),
+            "area":            st.column_config.TextColumn("Área",         disabled=True, width="small"),
             "cargo":           st.column_config.TextColumn("Cargo",        disabled=True, width="medium"),
             "subio_ficha":     st.column_config.SelectboxColumn("Ficha",   options=["SI","NO"], width="small"),
             "comentario":      st.column_config.TextColumn("Comentario",   width="large"),

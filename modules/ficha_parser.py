@@ -97,14 +97,6 @@ def scan_fichas(periodo: str, base_dir: str = None, workers_df=None) -> list[dic
     if not os.path.isdir(folder):
         return []
 
-    name_map = {}
-    if workers_df is not None and not workers_df.empty:
-        for _, row in workers_df.iterrows():
-            cod  = str(row.get("codigo", "") or "").strip()
-            nom  = str(row.get("nombre", "") or "").strip().upper()
-            if cod and nom:
-                name_map[nom] = cod
-
     results = []
     seen = set()
     for fname in os.listdir(folder):
@@ -112,8 +104,6 @@ def scan_fichas(periodo: str, base_dir: str = None, workers_df=None) -> list[dic
         if ext not in (".xlsx", ".xls", ".pdf"):
             continue
         codigo = _extract_code(fname)
-        if not codigo and name_map:
-            codigo = _match_by_name(fname, name_map)
         if not codigo or codigo in seen:
             continue
         seen.add(codigo)
