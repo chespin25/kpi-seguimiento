@@ -9,8 +9,9 @@ CREATE TABLE IF NOT EXISTS workers (
   updated_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Migración: agregar columna area si la tabla ya existe
-ALTER TABLE workers ADD COLUMN IF NOT EXISTS area TEXT DEFAULT '';
+-- Migraciones: agregar columnas nuevas si la tabla ya existe
+ALTER TABLE workers ADD COLUMN IF NOT EXISTS area      TEXT DEFAULT '';
+ALTER TABLE workers ADD COLUMN IF NOT EXISTS cargo_enc TEXT DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS kpi_state (
   codigo           TEXT NOT NULL,

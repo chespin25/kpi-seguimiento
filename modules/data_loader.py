@@ -90,6 +90,8 @@ def load_encargos(filepath: str) -> dict:
         oficina_enc  = str(row.iloc[idx["oficina_enc"]]).strip()
         if repart_enc in ("nan", "", "None"):
             continue   # encargo sin destino válido → ignorar
+        cargo_enc    = str(row.iloc[idx["cargo_enc"]]).strip()
+        cargo_enc    = "" if cargo_enc in ("nan", "None") else cargo_enc
         subgerencia_enc = _format_subgerencia(tipo_ofi_enc, oficina_enc)
         comentario = (f"Oficina de origen: {repart_orig} - {oficina_orig}"
                       if oficina_orig else f"Gerencia de origen: {repart_orig}")
@@ -106,7 +108,7 @@ def load_encargos(filepath: str) -> dict:
         else:
             gerencia_final = repart_enc
         result[codigo] = {"gerencia": gerencia_final, "subgerencia": subgerencia_enc,
-                          "comentario": comentario}
+                          "comentario": comentario, "cargo_enc": cargo_enc}
     return result
 
 
@@ -117,19 +119,22 @@ def build_workers_table(filepath: str) -> pd.DataFrame:
     def apply_encargo(row):
         enc = encargos.get(row["codigo"])
         if enc:
-            ger = enc["gerencia"] or row["gerencia"]   # fallback a home si destino vacío
+            ger = enc["gerencia"] or row["gerencia"]
             return pd.Series({
                 "gerencia":    ger,
                 "subgerencia": enc["subgerencia"] or row["subgerencia"],
                 "comentario":  enc["comentario"],
+                "cargo_enc":   enc.get("cargo_enc", ""),
             })
         return pd.Series({"gerencia": row["gerencia"],
-                          "subgerencia": row["subgerencia"], "comentario": ""})
+                          "subgerencia": row["subgerencia"],
+                          "comentario": "", "cargo_enc": ""})
 
     override = df.apply(apply_encargo, axis=1)
     df["gerencia"]    = override["gerencia"]
     df["subgerencia"] = override["subgerencia"]
     df["comentario"]  = override["comentario"]
+    df["cargo_enc"]   = override["cargo_enc"]
     df = df.drop(columns=["tipo_oficina", "oficina", "grupo"])
     if "area" not in df.columns:
         df["area"] = ""
@@ -144,7 +149,7 @@ def upsert_workers_to_db(filepath: str):
     df = build_workers_table(filepath)
     records = df.fillna("").to_dict("records")
     db = get_client()
-    extra_cols = ["area"]   # columnas que pueden no existir aún en la tabla
+    extra_cols = ["area", "cargo_enc"]   # columnas que pueden no existir aún en la tabla
     for i in range(0, len(records), 500):
         batch = records[i:i+500]
         try:
@@ -175,4 +180,6 @@ def load_workers_from_db() -> pd.DataFrame:
     df = df.drop(columns=["updated_at"], errors="ignore")
     if "area" not in df.columns:
         df["area"] = ""
+    if "cargo_enc" not in df.columns:
+        df["cargo_enc"] = ""
     return df.sort_values(["gerencia", "subgerencia", "nombre"]).reset_index(drop=True)

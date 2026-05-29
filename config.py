@@ -25,6 +25,7 @@ ENC_IDX = {
     "repart_enc":       12,  # destino gerencia (encargo)
     "tipo_ofi_enc":     14,  # destino tipo oficina
     "oficina_enc":      15,  # destino oficina
+    "cargo_enc":        11,  # título del cargo en encargo (col Encargo: ej. GERENTE RIESGOS)
 }
 
 # Ficha KPI (xlsx subidas por gerentes)

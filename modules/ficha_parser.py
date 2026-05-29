@@ -69,30 +69,41 @@ def _build_gerentes_map(workers_df) -> dict:
     gerentes: dict = {}
 
     for _, row in workers_df.iterrows():
-        cargo = str(row.get("cargo", "") or "").strip().upper()
-        cod   = str(row.get("codigo", "") or "").strip()
-        if not cargo.startswith("GERENTE") or not cod:
+        cargo     = str(row.get("cargo",     "") or "").strip().upper()
+        cargo_enc = str(row.get("cargo_enc", "") or "").strip().upper()
+        cod       = str(row.get("codigo",    "") or "").strip()
+        if not cod:
             continue
-        # Extraer la parte tras "GERENTE [DE] "
-        after = re.sub(r"^GERENTE\s*(DE\s+)?", "", cargo).strip()
-        if not after:
-            continue
-        # Buscar gerencia con mayor solapamiento de tokens significativos
-        after_tokens = {t for t in _norm(after).split()
-                        if len(t) > 2 and t.lower() not in _STOP_GER}
-        best_ger, best_score = None, 0.0
-        for ger in gerencias:
-            ger_tokens = {t for t in _norm(ger).split()
-                          if len(t) > 2 and t.lower() not in _STOP_GER}
-            if not ger_tokens:
+
+        # Fuente 1: CARGO original empieza con GERENTE
+        # Fuente 2: cargo_enc del encargo empieza con GERENTE (encargado de gerencia)
+        for source in [cargo, cargo_enc]:
+            if not source.startswith("GERENTE"):
                 continue
-            score = len(ger_tokens & after_tokens) / len(ger_tokens)
-            if score >= 0.5 and score > best_score:
-                best_score, best_ger = score, ger
-        if best_ger:
-            key = _norm(best_ger)
-            if key not in gerentes:
-                gerentes[key] = cod
+            after = re.sub(r"^GERENTE\s*(DE\s+)?", "", source).strip()
+            if not after:
+                # "GERENTE" solo → usar gerencia actual del trabajador
+                ger_actual = str(row.get("gerencia", "") or "").strip()
+                if ger_actual:
+                    key = _norm(ger_actual)
+                    if key not in gerentes:
+                        gerentes[key] = cod
+                continue
+            after_tokens = {t for t in _norm(after).split()
+                            if len(t) > 2 and t.lower() not in _STOP_GER}
+            best_ger, best_score = None, 0.0
+            for ger in gerencias:
+                ger_tokens = {t for t in _norm(ger).split()
+                              if len(t) > 2 and t.lower() not in _STOP_GER}
+                if not ger_tokens:
+                    continue
+                score = len(ger_tokens & after_tokens) / len(ger_tokens)
+                if score >= 0.5 and score > best_score:
+                    best_score, best_ger = score, ger
+            if best_ger:
+                key = _norm(best_ger)
+                if key not in gerentes:
+                    gerentes[key] = cod
     return gerentes
 
 
