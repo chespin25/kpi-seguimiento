@@ -115,7 +115,11 @@ def build_workers_table(filepath: str) -> pd.DataFrame:
     def apply_encargo(row):
         enc = encargos.get(row["codigo"])
         if enc:
-            return pd.Series(enc)
+            return pd.Series({
+                "gerencia":    row["gerencia"],       # home gerencia siempre fija
+                "subgerencia": enc["subgerencia"],    # destino del encargo
+                "comentario":  enc["comentario"],
+            })
         return pd.Series({"gerencia": row["gerencia"],
                           "subgerencia": row["subgerencia"], "comentario": ""})
 
