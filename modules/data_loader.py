@@ -19,7 +19,7 @@ def _format_subgerencia(tipo, oficina):
         "DIVISION":     f"DIVISIÓN {oficina}",
         "DEPARTAMENTO": f"DEPARTAMENTO {oficina}",
     }
-    return mapping.get(tipo, f"{tipo} {oficina}".strip())
+    return mapping.get(tipo, oficina if _normalize(tipo) == _normalize(oficina) else f"{tipo} {oficina}".strip())
 
 
 def _normalize(s: str) -> str:
@@ -89,7 +89,13 @@ def load_encargos(filepath: str) -> dict:
         tipo_ofi_enc = str(row.iloc[idx["tipo_ofi_enc"]]).strip()
         oficina_enc  = str(row.iloc[idx["oficina_enc"]]).strip()
         if repart_enc in ("nan", "", "None"):
-            continue   # encargo sin destino válido → ignorar
+            # Fallback: casos donde la columna Repart Enc está vacía pero
+            # la oficina de destino está en oficina_enc (ej. GERENCIA GENERAL,
+            # PRESIDENCIA EJECUTIVA). Usar oficina_enc como destino.
+            if oficina_enc and oficina_enc not in ("nan", "", "None"):
+                repart_enc = oficina_enc
+            else:
+                continue   # encargo sin destino válido → ignorar
         cargo_enc    = str(row.iloc[idx["cargo_enc"]]).strip()
         cargo_enc    = "" if cargo_enc in ("nan", "None") else cargo_enc
         subgerencia_enc = _format_subgerencia(tipo_ofi_enc, oficina_enc)

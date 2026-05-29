@@ -23,7 +23,7 @@ from modules.export_pdf  import export_gerencia_pdf
 st.set_page_config(page_title="KPI Distribución", layout="wide")
 
 # Invalida sesión si el código cambió (evita datos cacheados con versión vieja)
-_CODE_VER = "b4c3ec6"
+_CODE_VER = "c7f1d92"
 if st.session_state.get("_ver") != _CODE_VER:
     st.session_state.clear()
     st.session_state["_ver"] = _CODE_VER
@@ -135,7 +135,7 @@ with tab_tabla:
     gerencia_sel = st.selectbox("Gerencia", gerencias)
     df_g = (full_df[full_df["gerencia"] == gerencia_sel]
             .sort_values(["subgerencia", "nombre"])
-            .reset_index(drop=True))
+            .reset_index(drop=True)).copy()
 
     si_count = (df_g["subio_ficha"] == "SI").sum()
     total    = len(df_g)
@@ -143,6 +143,14 @@ with tab_tabla:
     c1.metric("Total", total)
     c2.metric("Subieron ficha", si_count)
     c3.metric("% Avance", f"{round(si_count/total*100,1)}%" if total else "0%")
+
+    # Cargo efectivo: muestra cargo_enc si está en encargo, cargo original si no
+    if "cargo_enc" not in df_g.columns:
+        df_g["cargo_enc"] = ""
+    df_g["cargo"] = df_g.apply(
+        lambda r: r["cargo_enc"].strip() if str(r.get("cargo_enc", "") or "").strip() else r["cargo"],
+        axis=1
+    )
 
     _display_cols = ["codigo", "nombre", "gerencia", "subgerencia", "cargo",
                      "subio_ficha", "comentario", "nro_objetivos", "formato_firmado"]

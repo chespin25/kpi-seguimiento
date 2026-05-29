@@ -10,6 +10,7 @@ OUTPUT_COLS = [
     "subgerencia",
     "area",
     "cargo",
+    "cargo_enc",
     "subio_ficha",
     "comentario",
     "nro_objetivos",
@@ -43,6 +44,8 @@ def build_full_table(workers_df: pd.DataFrame, periodo: str = PERIODO_ACTIVO) ->
     df["formato_firmado"] = df["codigo"].map(lambda c: state.get(c, {}).get("formato_firmado") or "NO")
     if "area" not in df.columns:
         df["area"] = ""
+    if "cargo_enc" not in df.columns:
+        df["cargo_enc"] = ""
 
     # comentario: combina el de encargo (data_loader) + comentario_extra del estado
     extra = df["codigo"].map(lambda c: state.get(c, {}).get("comentario_extra") or "")

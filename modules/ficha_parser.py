@@ -110,21 +110,50 @@ def _build_gerentes_map(workers_df) -> dict:
 def _match_filename_to_gerencia(filename: str, gerencias: list[str]) -> str | None:
     """
     Intenta asociar un filename sin código a una gerencia por similitud de tokens.
+    Soporta: nombre completo, nombre parcial, abreviaturas de palabras (prefijos ≥4 chars)
+    y siglas/acrónimos (primera letra de cada palabra significativa, ej. PCG).
     Retorna el nombre de gerencia si hay match suficiente, o None.
     """
     stem = re.sub(r"[_\-]", " ", os.path.splitext(os.path.basename(filename))[0])
-    stem_norm = _norm(stem)
-    stem_tokens = {t for t in stem_norm.split() if len(t) > 2 and t.lower() not in _STOP_GER}
+    stem_norm    = _norm(stem)
+    stem_compact = stem_norm.replace(" ", "")          # sin espacios, para siglas
+    stem_tokens  = [t for t in stem_norm.split() if len(t) > 2 and t.lower() not in _STOP_GER]
+    stem_set     = set(stem_tokens)
 
-    best_ger, best_score = None, 0
+    best_ger, best_score = None, 0.0
     for ger in gerencias:
         ger_norm   = _norm(ger)
-        ger_tokens = {t for t in ger_norm.split() if len(t) > 2 and t.lower() not in _STOP_GER}
+        ger_tokens = [t for t in ger_norm.split() if len(t) > 2 and t.lower() not in _STOP_GER]
         if not ger_tokens:
             continue
-        overlap = len(ger_tokens & stem_tokens)
-        score   = overlap / len(ger_tokens)   # fracción de tokens de gerencia presentes
-        if score >= 0.3 and overlap >= 1 and score > best_score:
+        ger_set = set(ger_tokens)
+
+        score = 0.0
+
+        # 1. Token-overlap exacto (palabras completas en común)
+        overlap = len(ger_set & stem_set)
+        if overlap >= 1:
+            score = max(score, overlap / len(ger_set))
+
+        # 2. Siglas/acrónimos: stem_compact == primera letra de cada token de gerencia
+        initials = "".join(t[0] for t in ger_tokens)
+        if len(initials) >= 2 and stem_compact == initials:
+            score = max(score, 0.95)
+        # 2b. Letras duplicadas al estilo español (RRHH → RH, prefijo de iniciales)
+        deduped = re.sub(r'(.)\1+', r'\1', stem_compact)
+        if len(deduped) >= 2 and len(initials) >= 2 and initials.startswith(deduped):
+            score = max(score, 0.88)
+
+        # 3. Prefijos: algún stem_token es prefijo de un ger_token (mín 4 chars)
+        if stem_tokens:
+            prefix_hits = sum(
+                1 for gt in ger_tokens
+                if any(len(st) >= 4 and gt.startswith(st) for st in stem_tokens)
+            )
+            if prefix_hits:
+                score = max(score, (prefix_hits / len(ger_tokens)) * 0.95)
+
+        if score >= 0.3 and score > best_score:
             best_score, best_ger = score, ger
     return best_ger
 
@@ -252,11 +281,27 @@ def scan_fichas(periodo: str, base_dir: str = None, workers_df=None) -> list[dic
                 if extracted:
                     codigo = _match_extracted_name(extracted, name_map)
 
-            # 2. Si sigue sin código, intentar match por gerencia → asignar al gerente
-            if not codigo and gerentes_map and gerencias_list:
-                ger = _match_filename_to_gerencia(fname, gerencias_list)
-                if ger:
-                    codigo = gerentes_map.get(_norm(ger))
+        # 2. Sin código aún: match por nombre de archivo → gerencia → gerente
+        #    Aplica a xlsx, xls y pdf
+        if not codigo and gerencias_list:
+            ger = _match_filename_to_gerencia(fname, gerencias_list)
+            if ger:
+                codigo = gerentes_map.get(_norm(ger))
+                # Fallback: buscar gerente directo en workers_df cuando gerentes_map
+                # no tiene entrada (cargo_enc puede estar vacío en BD)
+                if not codigo and workers_df is not None and not workers_df.empty:
+                    norm_ger = _norm(ger)
+                    subset = workers_df[
+                        workers_df["gerencia"].apply(lambda g: _norm(str(g or ""))) == norm_ger
+                    ]
+                    for col in ("cargo_enc", "cargo"):
+                        if col in subset.columns:
+                            hits = subset[
+                                subset[col].fillna("").str.upper().str.startswith("GERENTE")
+                            ]
+                            if not hits.empty:
+                                codigo = str(hits.iloc[0]["codigo"])
+                                break
 
         if not codigo or codigo in seen:
             continue
