@@ -1,10 +1,13 @@
 import os
+import re
 import sys
 import tempfile
 
 import io
 import zipfile
 from datetime import date
+
+_CODE7 = re.compile(r"(\d{7})")
 
 import pandas as pd
 import plotly.graph_objects as go
@@ -21,6 +24,14 @@ from modules.export_xlsx import export_gerencia_xlsx, export_all_xlsx
 from modules.export_pdf  import export_gerencia_pdf
 
 st.set_page_config(page_title="KPI Distribución", layout="wide")
+st.markdown("""
+<style>
+/* Fix click-target offset caused by Streamlit Cloud header */
+.main .block-container { padding-top: 1.5rem !important; }
+section[data-testid="stSidebar"] .block-container { padding-top: 1rem !important; }
+button { position: relative !important; }
+</style>
+""", unsafe_allow_html=True)
 
 # Invalida sesión si el código cambió (evita datos cacheados con versión vieja)
 _CODE_VER = "d8e2a03"
@@ -79,13 +90,30 @@ with st.sidebar:
                 extraidos = 0
                 for member in zf.namelist():
                     ext = os.path.splitext(member)[1].lower()
-                    if ext in (".xlsx", ".xls", ".pdf"):
-                        fname = os.path.basename(member)
-                        if fname:
-                            with zf.open(member) as src, \
-                                 open(os.path.join(dest, fname), "wb") as dst:
-                                dst.write(src.read())
-                            extraidos += 1
+                    if ext not in (".xlsx", ".xls", ".pdf"):
+                        continue
+                    fname = os.path.basename(member)
+                    if not fname:
+                        continue
+                    # Si el basename no tiene código de 7 dígitos,
+                    # buscar en los componentes del path del ZIP
+                    if not _CODE7.match(fname):
+                        for part in member.replace("\\", "/").split("/")[:-1]:
+                            m = _CODE7.match(part)
+                            if m:
+                                fname = m.group(1) + "_" + fname
+                                break
+                    # Evitar colisión de nombres (mismo nombre en subcarpetas distintas)
+                    dest_path = os.path.join(dest, fname)
+                    if os.path.exists(dest_path):
+                        base, fext = os.path.splitext(fname)
+                        i = 1
+                        while os.path.exists(dest_path):
+                            dest_path = os.path.join(dest, f"{base}_{i}{fext}")
+                            i += 1
+                    with zf.open(member) as src, open(dest_path, "wb") as dst:
+                        dst.write(src.read())
+                    extraidos += 1
             results = scan_fichas(periodo, base_dir=dest,
                                   workers_df=st.session_state.get("workers_df"))
             bulk_set(results, periodo)
